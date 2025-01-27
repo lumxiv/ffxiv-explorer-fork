@@ -18,8 +18,11 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class ExplorerPanel_View extends JScrollPane implements MouseListener, IIndexUpdateListener, TreeWillExpandListener {
+public class ExplorerPanel_View extends JScrollPane
+        implements MouseListener, IIndexUpdateListener, TreeWillExpandListener {
     private boolean enableHashUpdate = true;
 
     private final JTree fileTree;
@@ -35,7 +38,8 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
 
         var renderer = new DefaultTreeCellRenderer() {
             @Override
-            public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean exp, boolean leaf, int row, boolean hasFocus) {
+            public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean exp,
+                    boolean leaf, int row, boolean hasFocus) {
                 setTextNonSelectionColor(Color.BLACK);
 
                 if (value instanceof SelfRenderable)
@@ -60,6 +64,7 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
 
         contextMenu = new PopupMenu();
         MenuItem copyPath = new MenuItem("Copy full path");
+        MenuItem relativePath = new MenuItem("Copy game path");
         copyPath.addActionListener(e -> {
             TreePath[] selectedPaths = fileTree.getSelectionPaths();
 
@@ -80,7 +85,28 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
             Clipboard clip = Toolkit.getDefaultToolkit().getSystemClipboard();
             clip.setContents(selection, selection);
         });
+        relativePath.addActionListener(e -> {
+            TreePath[] selectedPaths = fileTree.getSelectionPaths();
+
+            if (selectedPaths == null)
+                return;
+
+            var strings = new ArrayList<String>();
+            for (var selectedPath : selectedPaths) {
+                var selectedObject = selectedPath.getLastPathComponent();
+                if (selectedObject instanceof SelfRenderable) {
+                    var path = ((SelfRenderable) selectedObject).getRelativePath();
+                    if (path != null)
+                        strings.add(path);
+                }
+            }
+
+            StringSelection selection = new StringSelection(String.join("\n", strings));
+            Clipboard clip = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clip.setContents(selection, selection);
+        });
         contextMenu.add(copyPath);
+        contextMenu.add(relativePath);
         this.add(contextMenu);
         this.getViewport().add(fileTree);
     }
@@ -137,7 +163,8 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
                     if (child instanceof UnknownVirtualFolder)
                         continue;
                     if (child instanceof VirtualFolder)
-                        SwingUtilities.invokeLater(() -> fileTree.expandPath(new TreePath(((VirtualFolder) child).getPath())));
+                        SwingUtilities.invokeLater(
+                                () -> fileTree.expandPath(new TreePath(((VirtualFolder) child).getPath())));
                 }
             }
         }
@@ -179,13 +206,13 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
                 if (!(obj instanceof DefaultMutableTreeNode))
                     break;
 
-                var node = (DefaultMutableTreeNode)obj;
+                var node = (DefaultMutableTreeNode) obj;
                 obj = node.getParent();
 
                 if (!(node instanceof VirtualFolder))
                     continue;
 
-                var folder = (VirtualFolder)node;
+                var folder = (VirtualFolder) node;
                 var indexFile = folder.getIndexFile();
                 if (indexFile != null)
                     selectedIndices.add(indexFile);
@@ -208,7 +235,8 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
             if (obj instanceof SqPackFolder) {
                 int children = ((DefaultMutableTreeNode) tp.getLastPathComponent()).getChildCount();
                 for (int i = 0; i < children; i++) {
-                    SqPackFile file = (SqPackFile) ((DefaultMutableTreeNode) ((DefaultMutableTreeNode) tp.getLastPathComponent()).getChildAt(i)).getUserObject();
+                    SqPackFile file = (SqPackFile) ((DefaultMutableTreeNode) ((DefaultMutableTreeNode) tp
+                            .getLastPathComponent()).getChildAt(i)).getUserObject();
                     if (!selectedFiles.contains(file))
                         selectedFiles.add(file);
                 }
@@ -252,12 +280,16 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
 
     private interface SelfRenderable {
         String getNodeText();
+
         String getFullPath();
+
+        String getRelativePath();
     }
 
     private static class RootFolder extends DefaultMutableTreeNode implements SelfRenderable {
         public void addIndex(SqPackIndexFile indexFile, DefaultTreeModel model) {
-            var indexNode = new VirtualFolder(indexFile.getPath(), Paths.get(indexFile.getPath()).getFileName().toString());
+            var indexNode = new VirtualFolder(indexFile.getPath(),
+                    Paths.get(indexFile.getPath()).getFileName().toString());
             indexNode.setUserObject(indexFile);
 
             var children = new ArrayList<VirtualFolder>(getChildCount());
@@ -266,7 +298,7 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
 
             var pos = Collections.binarySearch(children, indexNode);
             if (pos >= 0)
-                return;  // don't re-open what's already opened
+                return; // don't re-open what's already opened
             pos = ~pos;
 
             var unknownFolder = new UnknownVirtualFolder();
@@ -304,7 +336,7 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
                 indexNode.subfolders.put(unknownFolder.name, unknownFolder);
 
             insert(indexNode, pos);
-            model.nodesWereInserted(this, new int[]{pos});
+            model.nodesWereInserted(this, new int[] { pos });
         }
 
         public void removeIndex(SqPackIndexFile indexFile, DefaultTreeModel model) {
@@ -337,6 +369,11 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
             return null;
         }
 
+        @Override
+        public String getRelativePath() {
+            return null;
+        }
+
         public ArrayList<SqPackIndexFile> getAllIndexFiles() {
             var children = new ArrayList<SqPackIndexFile>(getChildCount());
             for (var i = 0; i < getChildCount(); i++)
@@ -345,7 +382,8 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
         }
     }
 
-    private static class VirtualFolder extends DefaultMutableTreeNode implements SelfRenderable, Comparable<VirtualFolder> {
+    private static class VirtualFolder extends DefaultMutableTreeNode
+            implements SelfRenderable, Comparable<VirtualFolder> {
         public final String name;
         public final String displayName;
         public HashMap<String, VirtualFolder> subfolders = new HashMap<>();
@@ -455,6 +493,23 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
 
             return name;
         }
+
+        @Override
+        public String getRelativePath() {
+            if (getParent() instanceof VirtualFolder) {
+                var parentPath = ((VirtualFolder) getParent()).getRelativePath();
+                if (parentPath == null)
+                    return name;
+                Pattern pattern = Pattern.compile(".index$", Pattern.CASE_INSENSITIVE);
+                Matcher matcher = pattern.matcher(parentPath);
+                boolean matchFound = matcher.find();
+                if (matchFound) {
+                    return name;
+                }
+                return parentPath + "/" + name;
+            }
+            return name;
+        }
     }
 
     private static class UnknownVirtualFolder extends VirtualFolder {
@@ -508,6 +563,19 @@ public class ExplorerPanel_View extends JScrollPane implements MouseListener, II
 
             return name;
         }
+
+        @Override
+        public String getRelativePath() {
+            var name = getFile().getName();
+
+            if (getParent() instanceof VirtualFolder) {
+                var parentPath = ((VirtualFolder) getParent()).getRelativePath();
+                if (parentPath == null)
+                    return name;
+                return parentPath + "/" + name;
+            }
+
+            return name;
+        }
     }
 }
-
