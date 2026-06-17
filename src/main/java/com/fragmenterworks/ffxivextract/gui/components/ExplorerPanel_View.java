@@ -134,7 +134,26 @@ public class ExplorerPanel_View extends JScrollPane
         if (SwingUtilities.isRightMouseButton(e)) {
             int row = fileTree.getClosestRowForLocation(e.getX(), e.getY());
             fileTree.setSelectionRow(row);
-            contextMenu.show(fileTree, e.getX(), e.getY());
+            //contextMenu.show(fileTree, e.getX(), e.getY());
+
+            TreePath[] selectedPaths = fileTree.getSelectionPaths();
+
+            if (selectedPaths == null)
+                return;
+
+            var strings = new ArrayList<String>();
+            for (var selectedPath : selectedPaths) {
+                var selectedObject = selectedPath.getLastPathComponent();
+                if (selectedObject instanceof SelfRenderable) {
+                    var path = ((SelfRenderable) selectedObject).getRelativePath();
+                    if (path != null)
+                        strings.add(path);
+                }
+            }
+
+            StringSelection selection = new StringSelection(String.join("\n", strings));
+            Clipboard clip = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clip.setContents(selection, selection);
         }
     }
 
